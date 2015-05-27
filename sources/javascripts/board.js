@@ -212,10 +212,11 @@
         panel.appendChild(heading);
 
         if (dueDate) {
-            var small = document.createElement("small");
-            small.textContent = dueDate.toLocaleDateString();
+            var label = document.createElement("label");
+            label.className = "label label-default";
+            label.textContent = dueDate.toLocaleDateString();
             heading.appendChild(document.createTextNode(" "));
-            heading.appendChild(small);
+            heading.appendChild(label);
         }
 
         if (milestone.description) {
