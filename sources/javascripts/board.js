@@ -88,7 +88,6 @@
                         this.parentNode.className = 'active';
                         localStorage.setItem("GITLAB_PROJECT", this.getAttribute('data-project'));
                         document.getElementById("brand").textContent = this.textContent;
-                        updateIssues();
                     };
 
                     var li = document.createElement('li');
@@ -107,8 +106,6 @@
                 document.querySelector('#project-switch a[data-project-id="{}"]'.replace("{}", currentProject.id))
                     .parentNode.className = 'active';
                 document.getElementById("brand").textContent = currentProject.name_with_namespace;
-
-                updateIssues();
             },
             'projects?per_page=100000'
         );
