@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-COMPATIBLE" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}gitlab agile board{% endblock %}</title>
+
+  {% block head %}
+  {% endblock %}
+
+  <link rel="stylesheet" href="stylesheets/website.css">
+</head>
+
+<body>
+<nav class="navbar navbar-default" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button class="navbar-toggle collapsed" type="button" data-toggle="collapse" data-target="#navbar">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a href="/" class="navbar-brand" id="brand">gitlab agile board</a>
+    </div>
+
+    <div class="navbar-collapse collapse" id="navbar">
+      <ul class="nav navbar-nav navbar-left">
+        <li>
+          <a href="#" onclick="refresh(); event.preventDefault();">
+            <i class="fa fa-refresh"></i>
+          </a>
+        </li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        <li class="dropdown">
+          <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false">
+            Switch project <span class="caret"></span>
+          </a>
+          <ul class="dropdown-menu" role="menu" id="project-switch">
+          </ul>
+        </li>
+        <li>
+          <a href="#" onclick="logout(); event.preventDefault();">
+            <i class="fa fa-sign-out"></i>
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+{% block body %}
+{% endblock %}
+
+{% block footer %}
+{% endblock %}
+
+<script src="javascripts/website.js"></script>
+</body>
+</html>

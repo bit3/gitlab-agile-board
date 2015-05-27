@@ -1,0 +1,13 @@
+{
+  "name": "gitlab-agile-board",
+  "license": "proprietary",
+  "authors": [
+    "Tristan Lins <tristan@lins.io>"
+  ],
+  "dependencies": {
+    "bootstrap": "*",
+    "bootstrap-material-design": "*",
+    "font-awesome": "~4.3.0",
+    "bootstrap-sass": "~3.3.4"
+  }
+}

@@ -1,0 +1,12 @@
+
+@import "../../bower_components/bootstrap-sass/assets/stylesheets/bootstrap/variables";
+
+$navbar-margin-bottom: 0;
+$text-muted: $gray-lighter;
+
+@import "../../bower_components/font-awesome/scss/font-awesome";
+@import "../../bower_components/bootstrap-sass/assets/stylesheets/bootstrap";
+
+html {
+  overflow-y: scroll;
+}
