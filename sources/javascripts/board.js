@@ -216,6 +216,10 @@
             heading.appendChild(label);
         }
 
+        var counter = document.createElement("span");
+        counter.className = "counter-container pull-right";
+        heading.appendChild(counter);
+
         if (milestone.description) {
             var body = document.createElement("div");
             body.className = "panel-body";
@@ -231,6 +235,12 @@
     }
 
     function renderIssues(currentProject, labelColors, issues) {
+        var issueCounters = document.querySelectorAll('.counter-container');
+        for (var index=0; index<issueCounters.length; index++) {
+            var issueCounter = issueCounters.item(index);
+            issueCounter.innerHTML = "";
+        }
+
         issues.forEach(function(issue) {
             renderIssue(currentProject, labelColors, issue);
         })
@@ -240,17 +250,172 @@
         var credentials = requireCredentials();
         var labels = issue.labels || [];
 
-        var list;
+        var milestoneId = false;
         if (issue.milestone) {
-            list = document.querySelector("[data-milestone-id=\"{}\"] .list-group".replace("{}", issue.milestone.id));
-
-            if (!list) {
-                return;
-            }
+            milestoneId = issue.milestone.id;
         } else if ("closed" == issue.state) {
             return;
         } else {
-            list = document.querySelector("[data-milestone-id=\"backlog\"] .list-group");
+            milestoneId = "backlog";
+        }
+
+        var list = document.querySelector("[data-milestone-id=\"{}\"] .list-group".replace("{}", milestoneId));
+
+        if (!list) {
+            return;
+        }
+
+        var issueEpicCounter = document.querySelector("[data-milestone-id=\"{}\"] .issue-epic-counter".replace("{}", milestoneId));
+        if (!issueEpicCounter) {
+            issueEpicCounter = document.createElement("div");
+            issueEpicCounter.className = "issue-epic-counter badge hide";
+            issueEpicCounter.textContent = "0";
+            issueEpicCounter.setAttribute("data-count", "0");
+
+            var container = document.querySelector("[data-milestone-id=\"{}\"] .counter-container".replace("{}", milestoneId));
+            container.appendChild(document.createTextNode(" "));
+            container.appendChild(issueEpicCounter);
+        }
+
+        var issueBugCounter = document.querySelector("[data-milestone-id=\"{}\"] .issue-bug-counter".replace("{}", milestoneId));
+        if (!issueBugCounter) {
+            issueBugCounter = document.createElement("div");
+            issueBugCounter.className = "issue-bug-counter badge hide";
+            issueBugCounter.textContent = "0";
+            issueBugCounter.setAttribute("data-count", "0");
+
+            var container = document.querySelector("[data-milestone-id=\"{}\"] .counter-container".replace("{}", milestoneId));
+            container.appendChild(document.createTextNode(" "));
+            container.appendChild(issueBugCounter);
+        }
+
+        var issueFeatureCounter = document.querySelector("[data-milestone-id=\"{}\"] .issue-feature-counter".replace("{}", milestoneId));
+        if (!issueFeatureCounter) {
+            issueFeatureCounter = document.createElement("div");
+            issueFeatureCounter.className = "issue-feature-counter badge hide";
+            issueFeatureCounter.textContent = "0";
+            issueFeatureCounter.setAttribute("data-count", "0");
+
+            var container = document.querySelector("[data-milestone-id=\"{}\"] .counter-container".replace("{}", milestoneId));
+            container.appendChild(document.createTextNode(" "));
+            container.appendChild(issueFeatureCounter);
+        }
+
+        var issueEnhancementCounter = document.querySelector("[data-milestone-id=\"{}\"] .issue-enhancement-counter".replace("{}", milestoneId));
+        if (!issueEnhancementCounter) {
+            issueEnhancementCounter = document.createElement("div");
+            issueEnhancementCounter.className = "issue-enhancement-counter badge hide";
+            issueEnhancementCounter.textContent = "0";
+            issueEnhancementCounter.setAttribute("data-count", "0");
+
+            var container = document.querySelector("[data-milestone-id=\"{}\"] .counter-container".replace("{}", milestoneId));
+            container.appendChild(document.createTextNode(" "));
+            container.appendChild(issueEnhancementCounter);
+        }
+
+        var issueOthersCounter = document.querySelector("[data-milestone-id=\"{}\"] .issue-others-counter".replace("{}", milestoneId));
+        if (!issueOthersCounter) {
+            issueOthersCounter = document.createElement("div");
+            issueOthersCounter.className = "issue-others-counter badge hide";
+            issueOthersCounter.textContent = "0";
+            issueOthersCounter.setAttribute("data-count", "0");
+
+            var container = document.querySelector("[data-milestone-id=\"{}\"] .counter-container".replace("{}", milestoneId));
+            container.appendChild(document.createTextNode(" "));
+            container.appendChild(issueOthersCounter);
+        }
+
+        var issueTotalCounter = document.querySelector("[data-milestone-id=\"{}\"] .issue-total-counter".replace("{}", milestoneId));
+        if (!issueTotalCounter) {
+            issueTotalCounter = document.createElement("div");
+            issueTotalCounter.className = "issue-total-counter badge";
+            issueTotalCounter.textContent = "0";
+            issueTotalCounter.setAttribute("data-count", "0");
+
+            var container = document.querySelector("[data-milestone-id=\"{}\"] .counter-container".replace("{}", milestoneId));
+            container.appendChild(document.createTextNode(" "));
+            container.appendChild(issueTotalCounter);
+        }
+
+        if ("closed" != issue.state) {
+            if (-1 !== labels.indexOf("epic")) {
+                issueEpicCounter.classList.remove("hide");
+                issueEpicCounter.innerHTML = "";
+
+                var count = parseInt(issueEpicCounter.getAttribute("data-count")) + 1;
+                issueEpicCounter.setAttribute("data-count", count);
+
+                var epicIcon = document.createElement("i");
+                epicIcon.className = "fa fa-diamond";
+
+                issueEpicCounter.appendChild(epicIcon);
+                issueEpicCounter.appendChild(document.createTextNode(" "));
+                issueEpicCounter.appendChild(document.createTextNode(count));
+            } else if (-1 !== labels.indexOf("bug")) {
+                issueBugCounter.classList.remove("hide");
+                issueBugCounter.innerHTML = "";
+
+                var count = parseInt(issueBugCounter.getAttribute("data-count")) + 1;
+                issueBugCounter.setAttribute("data-count", count);
+
+                var bugIcon = document.createElement("i");
+                bugIcon.className = "fa fa-bug";
+
+                issueBugCounter.appendChild(bugIcon);
+                issueBugCounter.appendChild(document.createTextNode(" "));
+                issueBugCounter.appendChild(document.createTextNode(count));
+            } else if (-1 !== labels.indexOf("feature")) {
+                issueFeatureCounter.classList.remove("hide");
+                issueFeatureCounter.innerHTML = "";
+
+                var count = parseInt(issueFeatureCounter.getAttribute("data-count")) + 1;
+                issueFeatureCounter.setAttribute("data-count", count);
+
+                var featureIcon = document.createElement("i");
+                featureIcon.className = "fa fa-plus";
+                issueFeatureCounter.appendChild(featureIcon);
+                issueFeatureCounter.appendChild(document.createTextNode(" "));
+                issueFeatureCounter.appendChild(document.createTextNode(count));
+            } else if (-1 !== labels.indexOf("enhancement")) {
+                issueEnhancementCounter.classList.remove("hide");
+                issueEnhancementCounter.innerHTML = "";
+
+                var count = parseInt(issueEnhancementCounter.getAttribute("data-count")) + 1;
+                issueEnhancementCounter.setAttribute("data-count", count);
+
+                var enhancementIcon = document.createElement("i");
+                enhancementIcon.className = "fa fa-thumbs-o-up";
+
+                issueEnhancementCounter.appendChild(enhancementIcon);
+                issueEnhancementCounter.appendChild(document.createTextNode(" "));
+                issueEnhancementCounter.appendChild(document.createTextNode(count));
+            } else {
+                issueOthersCounter.classList.remove("hide");
+                issueOthersCounter.innerHTML = "";
+
+                var count = parseInt(issueOthersCounter.getAttribute("data-count")) + 1;
+                issueOthersCounter.setAttribute("data-count", count);
+
+                var warningIcon = document.createElement("i");
+                warningIcon.className = "fa fa-warning";
+
+                issueOthersCounter.appendChild(warningIcon);
+                issueOthersCounter.appendChild(document.createTextNode(" "));
+                issueOthersCounter.appendChild(document.createTextNode(count));
+            }
+
+            {
+                issueTotalCounter.innerHTML = "";
+
+                var count = parseInt(issueTotalCounter.getAttribute("data-count")) + 1;
+                issueTotalCounter.setAttribute("data-count", count);
+
+                var enhancementIcon = document.createElement("i");
+                enhancementIcon.className = "fa fa-angle-double-right";
+                issueTotalCounter.appendChild(enhancementIcon);
+                issueTotalCounter.appendChild(document.createTextNode(" "));
+                issueTotalCounter.appendChild(document.createTextNode(count));
+            }
         }
 
         var a = document.createElement("a");
@@ -261,7 +426,9 @@
 
         var icon = document.createElement("i");
         icon.className = "fa ";
-        if (-1 !== labels.indexOf("bug")) {
+        if (-1 !== labels.indexOf("epic")) {
+            icon.className += "fa-diamond";
+        } else if (-1 !== labels.indexOf("bug")) {
             icon.className += "fa-bug";
         } else if (-1 !== labels.indexOf("feature")) {
             icon.className += "fa-plus";
@@ -278,7 +445,11 @@
         a.appendChild(title);
 
         if ("closed" == issue.state) {
-            title.className += " text-muted";
+            a.className += " closed";
+        }
+
+        if (-1 !== labels.indexOf("epic")) {
+            title.className += " text-primary";
         } else if (-1 !== labels.indexOf("bug")) {
             title.className += " text-danger";
         } else if (-1 !== labels.indexOf("feature")) {
