@@ -250,6 +250,8 @@
             if (!list) {
                 return;
             }
+        } else if ("closed" == issue.state) {
+            return;
         } else {
             list = document.querySelector("[data-milestone-id=\"backlog\"] .list-group");
         }
