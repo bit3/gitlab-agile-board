@@ -1,4 +1,8 @@
 (function () {
+    var progressHideTimeout;
+    var currentProject = null;
+    var labels = null;
+
     function requireCredentials() {
         var url = localStorage.getItem("GITLAB_URL");
         var token = localStorage.getItem("GITLAB_TOKEN");
@@ -13,9 +17,11 @@
 
     function query(callback, urlPart, parameters) {
         var credentials = requireCredentials();
+
+        clearTimeout(progressHideTimeout);
         var progress = document.getElementById("progress");
-        progress.parentNode.style.opacity = 1;
         progress.style.width = '10%';
+        progress.parentNode.style.visibility = "visible";
 
         var url = credentials.url.replace(/\/+$/, "") + "/api/v3/" + urlPart;
 
@@ -25,7 +31,11 @@
         r.onreadystatechange = function () {
             if (r.readyState >= 4) {
                 progress.style.width = '100%';
-                progress.parentNode.style.opacity = 0;
+
+                progressHideTimeout = setTimeout(function() {
+                    progress.style.width = '0%';
+                    progress.parentNode.style.visibility = "hidden";
+                }, 1000);
 
                 if (r.status != 200) return;
                 callback(JSON.parse(r.responseText));
@@ -47,7 +57,7 @@
         ul.innerHTML = "";
     }
 
-    function updateProjects() {
+    function updateProjects(callback) {
         query(
             function (projects) {
                 clearProjectList();
@@ -75,89 +85,92 @@
                     }
 
                     var a = document.createElement('a');
-                    a.href = '#';
+                    a.href = '#' + project.id;
                     a.setAttribute('data-project-id', project.id);
                     a.setAttribute('data-project', JSON.stringify(project));
                     a.textContent = project.name_with_namespace;
-                    a.onclick = function () {
-                        var active = document.querySelector('#project-switch li.active');
-                        if (active) {
-                            active.className = '';
-                        }
-
-                        this.parentNode.className = 'active';
-                        localStorage.setItem("GITLAB_PROJECT", this.getAttribute('data-project'));
-                        document.getElementById("brand").textContent = this.textContent;
-                    };
 
                     var li = document.createElement('li');
                     li.appendChild(a);
                     ul.appendChild(li);
                 });
 
-                var currentProject = localStorage.getItem("GITLAB_PROJECT");
-                if (!currentProject) {
-                    currentProject = projects[0];
-                    localStorage.setItem("GITLAB_PROJECT", JSON.stringify(currentProject));
-                } else {
-                    currentProject = JSON.parse(currentProject);
-                }
+                callback();
+            },
+            'projects?per_page=100000'
+        );
+    }
+
+    function updateProject() {
+        var projectId = parseInt(location.hash.substring(1));
+
+        var active = document.querySelector('#project-switch li.active');
+        if (active) {
+            active.className = '';
+        }
+
+        document.getElementById("brand").textContent = "gitlab agile board";
+
+        if (!projectId || projectId <= 0) {
+            return;
+        }
+
+        query(
+            function (project) {
+                currentProject = project;
 
                 document.querySelector('#project-switch a[data-project-id="{}"]'.replace("{}", currentProject.id))
                     .parentNode.className = 'active';
                 document.getElementById("brand").textContent = currentProject.name_with_namespace;
+
+                query(
+                    function (labels) {
+                        var labelColors = {};
+                        labels.forEach(function (label) {
+                            labelColors[label.name] = label.color;
+                        });
+
+                        query(
+                            function (milestones) {
+                                milestones.sort(function (a, b) {
+                                    if (a.due_date && !b.due_date) {
+                                        return -1;
+                                    }
+                                    if (!a.due_date && b.due_date) {
+                                        return 1;
+                                    }
+                                    if (a.due_date && b.due_date) {
+                                        a = new Date(a.due_date);
+                                        b = new Date(b.due_date);
+
+                                        return a.getTime() - b.getTime();
+                                    }
+                                    return a.title.localeCompare(b.title);
+                                });
+
+                                query(
+                                    function (issues) {
+                                        clearIssues();
+
+                                        renderMilestones(currentProject, milestones);
+                                        renderIssues(currentProject, labelColors, issues);
+                                    },
+                                    "projects/{}/issues?per_page=100000".replace("{}", currentProject.id)
+                                );
+                            },
+                            "projects/{}/milestones?per_page=100000".replace("{}", currentProject.id)
+                        );
+                    },
+                    "projects/{}/labels?per_page=100000".replace("{}", currentProject.id)
+                );
             },
-            'projects?per_page=100000'
+            "projects/{}".replace("{}", projectId)
         );
     }
 
     function clearIssues() {
         var div = document.getElementById("issues");
         div.innerHTML = "";
-    }
-
-    function updateIssues() {
-        clearIssues();
-        var currentProject = JSON.parse(localStorage.getItem("GITLAB_PROJECT"));
-
-        query(
-            function (labels) {
-                var labelColors = {};
-                labels.forEach(function (label) {
-                    labelColors[label.name] = label.color;
-                });
-
-                query(
-                    function (milestones) {
-                        milestones.sort(function (a, b) {
-                            if (a.due_date && !b.due_date) {
-                                return -1;
-                            }
-                            if (!a.due_date && b.due_date) {
-                                return 1;
-                            }
-                            if (a.due_date && b.due_date) {
-                                a = new Date(a.due_date);
-                                b = new Date(b.due_date);
-
-                                return a.getTime() - b.getTime();
-                            }
-                            return a.title.localeCompare(b.title);
-                        });
-
-                        query(
-                            function (issues) {
-                                renderMilestones(currentProject, milestones);
-                                renderIssues(currentProject, labelColors, issues);
-                            },
-                            "projects/{}/issues?per_page=100000".replace("{}", currentProject.id)
-                        );
-                    },
-                    "projects/{}/milestones?per_page=100000".replace("{}", currentProject.id)
-                );
-            },
-            "projects/{}/labels?per_page=100000".replace("{}", currentProject.id)
-        );
     }
 
     function renderMilestones(currentProject, milestones) {
@@ -216,9 +229,16 @@
             heading.appendChild(label);
         }
 
-        var counter = document.createElement("span");
-        counter.className = "counter-container pull-right";
-        heading.appendChild(counter);
+        var counterContainer = document.createElement("span");
+        counterContainer.className = "counter-container pull-right";
+        heading.appendChild(counterContainer);
+
+        renderCounter("epic", "diamond", counterContainer);
+        renderCounter("bug", "bug", counterContainer);
+        renderCounter("feature", "plus", counterContainer);
+        renderCounter("enhancement", "thumbs-o-up", counterContainer);
+        renderCounter("others", "warning", counterContainer);
+        renderCounter("total", "angle-double-right", counterContainer);
 
         if (milestone.description) {
             var body = document.createElement("div");
@@ -234,13 +254,26 @@
         document.getElementById("issues").appendChild(panel);
     }
 
-    function renderIssues(currentProject, labelColors, issues) {
-        var issueCounters = document.querySelectorAll('.counter-container');
-        for (var index=0; index<issueCounters.length; index++) {
-            var issueCounter = issueCounters.item(index);
-            issueCounter.innerHTML = "";
-        }
+    function renderCounter(type, icon, container) {
+        var counter = document.createElement("div");
+        counter.className = "issue-{}-counter badge hide".replace("{}", type);
 
+        var fa = document.createElement("i");
+        fa.className = "fa fa-{}".replace("{}", icon);
+
+        var count = document.createElement("span");
+        count.className = "count";
+        count.textContent = "0";
+
+        counter.appendChild(fa);
+        counter.appendChild(document.createTextNode(" "));
+        counter.appendChild(count);
+
+        container.appendChild(document.createTextNode(" "));
+        container.appendChild(counter);
+    }
+
+    function renderIssues(currentProject, labelColors, issues) {
         issues.forEach(function(issue) {
             renderIssue(currentProject, labelColors, issue);
         })
@@ -265,157 +298,33 @@
             return;
         }
 
-        var issueEpicCounter = document.querySelector("[data-milestone-id=\"{}\"] .issue-epic-counter".replace("{}", milestoneId));
-        if (!issueEpicCounter) {
-            issueEpicCounter = document.createElement("div");
-            issueEpicCounter.className = "issue-epic-counter badge hide";
-            issueEpicCounter.textContent = "0";
-            issueEpicCounter.setAttribute("data-count", "0");
-
-            var container = document.querySelector("[data-milestone-id=\"{}\"] .counter-container".replace("{}", milestoneId));
-            container.appendChild(document.createTextNode(" "));
-            container.appendChild(issueEpicCounter);
-        }
-
-        var issueBugCounter = document.querySelector("[data-milestone-id=\"{}\"] .issue-bug-counter".replace("{}", milestoneId));
-        if (!issueBugCounter) {
-            issueBugCounter = document.createElement("div");
-            issueBugCounter.className = "issue-bug-counter badge hide";
-            issueBugCounter.textContent = "0";
-            issueBugCounter.setAttribute("data-count", "0");
-
-            var container = document.querySelector("[data-milestone-id=\"{}\"] .counter-container".replace("{}", milestoneId));
-            container.appendChild(document.createTextNode(" "));
-            container.appendChild(issueBugCounter);
-        }
-
-        var issueFeatureCounter = document.querySelector("[data-milestone-id=\"{}\"] .issue-feature-counter".replace("{}", milestoneId));
-        if (!issueFeatureCounter) {
-            issueFeatureCounter = document.createElement("div");
-            issueFeatureCounter.className = "issue-feature-counter badge hide";
-            issueFeatureCounter.textContent = "0";
-            issueFeatureCounter.setAttribute("data-count", "0");
-
-            var container = document.querySelector("[data-milestone-id=\"{}\"] .counter-container".replace("{}", milestoneId));
-            container.appendChild(document.createTextNode(" "));
-            container.appendChild(issueFeatureCounter);
-        }
-
-        var issueEnhancementCounter = document.querySelector("[data-milestone-id=\"{}\"] .issue-enhancement-counter".replace("{}", milestoneId));
-        if (!issueEnhancementCounter) {
-            issueEnhancementCounter = document.createElement("div");
-            issueEnhancementCounter.className = "issue-enhancement-counter badge hide";
-            issueEnhancementCounter.textContent = "0";
-            issueEnhancementCounter.setAttribute("data-count", "0");
-
-            var container = document.querySelector("[data-milestone-id=\"{}\"] .counter-container".replace("{}", milestoneId));
-            container.appendChild(document.createTextNode(" "));
-            container.appendChild(issueEnhancementCounter);
-        }
-
-        var issueOthersCounter = document.querySelector("[data-milestone-id=\"{}\"] .issue-others-counter".replace("{}", milestoneId));
-        if (!issueOthersCounter) {
-            issueOthersCounter = document.createElement("div");
-            issueOthersCounter.className = "issue-others-counter badge hide";
-            issueOthersCounter.textContent = "0";
-            issueOthersCounter.setAttribute("data-count", "0");
-
-            var container = document.querySelector("[data-milestone-id=\"{}\"] .counter-container".replace("{}", milestoneId));
-            container.appendChild(document.createTextNode(" "));
-            container.appendChild(issueOthersCounter);
-        }
-
-        var issueTotalCounter = document.querySelector("[data-milestone-id=\"{}\"] .issue-total-counter".replace("{}", milestoneId));
-        if (!issueTotalCounter) {
-            issueTotalCounter = document.createElement("div");
-            issueTotalCounter.className = "issue-total-counter badge";
-            issueTotalCounter.textContent = "0";
-            issueTotalCounter.setAttribute("data-count", "0");
-
-            var container = document.querySelector("[data-milestone-id=\"{}\"] .counter-container".replace("{}", milestoneId));
-            container.appendChild(document.createTextNode(" "));
-            container.appendChild(issueTotalCounter);
-        }
+        var issueEpicCounter = document.querySelector("[data-milestone-id=\"{}\"] .issue-epic-counter .count".replace("{}", milestoneId));
+        var issueBugCounter = document.querySelector("[data-milestone-id=\"{}\"] .issue-bug-counter .count".replace("{}", milestoneId));
+        var issueFeatureCounter = document.querySelector("[data-milestone-id=\"{}\"] .issue-feature-counter .count".replace("{}", milestoneId));
+        var issueEnhancementCounter = document.querySelector("[data-milestone-id=\"{}\"] .issue-enhancement-counter .count".replace("{}", milestoneId));
+        var issueOthersCounter = document.querySelector("[data-milestone-id=\"{}\"] .issue-others-counter .count".replace("{}", milestoneId));
+        var issueTotalCounter = document.querySelector("[data-milestone-id=\"{}\"] .issue-total-counter .count".replace("{}", milestoneId));
 
         if ("closed" != issue.state) {
             if (-1 !== labels.indexOf("epic")) {
-                issueEpicCounter.classList.remove("hide");
-                issueEpicCounter.innerHTML = "";
-
-                var count = parseInt(issueEpicCounter.getAttribute("data-count")) + 1;
-                issueEpicCounter.setAttribute("data-count", count);
-
-                var epicIcon = document.createElement("i");
-                epicIcon.className = "fa fa-diamond";
-
-                issueEpicCounter.appendChild(epicIcon);
-                issueEpicCounter.appendChild(document.createTextNode(" "));
-                issueEpicCounter.appendChild(document.createTextNode(count));
+                issueEpicCounter.parentNode.classList.remove("hide");
+                issueEpicCounter.textContent = parseInt(issueEpicCounter.textContent) + 1;
             } else if (-1 !== labels.indexOf("bug")) {
-                issueBugCounter.classList.remove("hide");
-                issueBugCounter.innerHTML = "";
-
-                var count = parseInt(issueBugCounter.getAttribute("data-count")) + 1;
-                issueBugCounter.setAttribute("data-count", count);
-
-                var bugIcon = document.createElement("i");
-                bugIcon.className = "fa fa-bug";
-
-                issueBugCounter.appendChild(bugIcon);
-                issueBugCounter.appendChild(document.createTextNode(" "));
-                issueBugCounter.appendChild(document.createTextNode(count));
+                issueBugCounter.parentNode.classList.remove("hide");
+                issueBugCounter.textContent = parseInt(issueBugCounter.textContent) + 1;
             } else if (-1 !== labels.indexOf("feature")) {
-                issueFeatureCounter.classList.remove("hide");
-                issueFeatureCounter.innerHTML = "";
-
-                var count = parseInt(issueFeatureCounter.getAttribute("data-count")) + 1;
-                issueFeatureCounter.setAttribute("data-count", count);
-
-                var featureIcon = document.createElement("i");
-                featureIcon.className = "fa fa-plus";
-                issueFeatureCounter.appendChild(featureIcon);
-                issueFeatureCounter.appendChild(document.createTextNode(" "));
-                issueFeatureCounter.appendChild(document.createTextNode(count));
+                issueFeatureCounter.parentNode.classList.remove("hide");
+                issueFeatureCounter.textContent = parseInt(issueFeatureCounter.textContent) + 1;
             } else if (-1 !== labels.indexOf("enhancement")) {
-                issueEnhancementCounter.classList.remove("hide");
-                issueEnhancementCounter.innerHTML = "";
-
-                var count = parseInt(issueEnhancementCounter.getAttribute("data-count")) + 1;
-                issueEnhancementCounter.setAttribute("data-count", count);
-
-                var enhancementIcon = document.createElement("i");
-                enhancementIcon.className = "fa fa-thumbs-o-up";
-
-                issueEnhancementCounter.appendChild(enhancementIcon);
-                issueEnhancementCounter.appendChild(document.createTextNode(" "));
-                issueEnhancementCounter.appendChild(document.createTextNode(count));
+                issueEnhancementCounter.parentNode.classList.remove("hide");
+                issueEnhancementCounter.textContent = parseInt(issueEnhancementCounter.textContent) + 1;
             } else {
-                issueOthersCounter.classList.remove("hide");
-                issueOthersCounter.innerHTML = "";
-
-                var count = parseInt(issueOthersCounter.getAttribute("data-count")) + 1;
-                issueOthersCounter.setAttribute("data-count", count);
-
-                var warningIcon = document.createElement("i");
-                warningIcon.className = "fa fa-warning";
-
-                issueOthersCounter.appendChild(warningIcon);
-                issueOthersCounter.appendChild(document.createTextNode(" "));
-                issueOthersCounter.appendChild(document.createTextNode(count));
+                issueOthersCounter.parentNode.classList.remove("hide");
+                issueOthersCounter.textContent = parseInt(issueOthersCounter.textContent) + 1;
             }
 
-            {
-                issueTotalCounter.innerHTML = "";
-
-                var count = parseInt(issueTotalCounter.getAttribute("data-count")) + 1;
-                issueTotalCounter.setAttribute("data-count", count);
-
-                var enhancementIcon = document.createElement("i");
-                enhancementIcon.className = "fa fa-angle-double-right";
-                issueTotalCounter.appendChild(enhancementIcon);
-                issueTotalCounter.appendChild(document.createTextNode(" "));
-                issueTotalCounter.appendChild(document.createTextNode(count));
-            }
+            issueTotalCounter.parentNode.classList.remove("hide");
+            issueTotalCounter.textContent = parseInt(issueTotalCounter.textContent) + 1;
         }
 
         var a = document.createElement("a");
@@ -424,22 +333,40 @@
         a.href = credentials.url.replace(/\/+$/, "") + "/" + currentProject.path_with_namespace + "/issues/" + issue.id;
         list.appendChild(a);
 
-        var icon = document.createElement("i");
-        icon.className = "fa ";
-        if (-1 !== labels.indexOf("epic")) {
-            icon.className += "fa-diamond";
-        } else if (-1 !== labels.indexOf("bug")) {
-            icon.className += "fa-bug";
-        } else if (-1 !== labels.indexOf("feature")) {
-            icon.className += "fa-plus";
-        } else if (-1 !== labels.indexOf("enhancement")) {
-            icon.className += "fa-thumbs-o-up";
+        var priorityIcon = document.createElement("i");
+        priorityIcon.className = "fa fa-fw ";
+        if (-1 !== labels.indexOf("critical")) {
+            priorityIcon.className += "fa-arrow-circle-up text-danger";
+        } else if (-1 !== labels.indexOf("high")) {
+            priorityIcon.className += "fa-chevron-circle-up text-warning";
+        } else if (-1 !== labels.indexOf("low")) {
+            priorityIcon.className += "fa-chevron-circle-down text-info";
+        } else if (-1 !== labels.indexOf("trivial")) {
+            priorityIcon.className += "fa-arrow-circle-down text-success";
         } else {
-            icon.className += "fa-warning";
+            priorityIcon.className += "fa-chevron-circle-right text-primary";
+        }
+
+        var typeIcon = document.createElement("i");
+        typeIcon.className = "fa fa-fw ";
+        if (-1 !== labels.indexOf("epic")) {
+            typeIcon.className += "fa-diamond text-primary";
+        } else if (-1 !== labels.indexOf("bug")) {
+            typeIcon.className += "fa-bug text-danger";
+        } else if (-1 !== labels.indexOf("feature")) {
+            typeIcon.className += "fa-plus text-success";
+        } else if (-1 !== labels.indexOf("enhancement")) {
+            typeIcon.className += "fa-thumbs-o-up text-info";
+        } else if (-1 !== labels.indexOf("documentation")) {
+            typeIcon.className += "fa-book text-muted";
+        } else {
+            typeIcon.className += "fa-warning text-warning";
         }
 
         var title = document.createElement("span");
-        title.appendChild(icon);
+        title.appendChild(priorityIcon);
+        title.appendChild(document.createTextNode(" "));
+        title.appendChild(typeIcon);
         title.appendChild(document.createTextNode(" "));
         title.appendChild(document.createTextNode(issue.title));
         a.appendChild(title);
@@ -448,6 +375,7 @@
             a.className += " closed";
         }
 
+        /*
         if (-1 !== labels.indexOf("epic")) {
             title.className += " text-primary";
         } else if (-1 !== labels.indexOf("bug")) {
@@ -459,6 +387,7 @@
         } else {
             title.className += " text-warning";
         }
+        */
 
         labels.forEach(function(label) {
             var span = document.createElement("span");
@@ -500,8 +429,7 @@
         try {
             requireCredentials();
             hideLogin();
-            updateProjects();
-            updateIssues();
+            updateProjects(updateProject);
         } catch (e) {
             showLogin();
         }
@@ -535,8 +463,10 @@
     };
 
     window.refresh = function () {
-        updateIssues();
+        updateProject();
     };
+
+    window.addEventListener("hashchange", updateProject);
 
     document.addEventListener("DOMContentLoaded", connect);
 })();
