@@ -15,13 +15,14 @@
         return {url: url, token: token};
     }
 
-    function query(callback, urlPart, parameters) {
+    function query(callback, urlPart, label) {
         var credentials = requireCredentials();
 
         clearTimeout(progressHideTimeout);
         var progress = document.getElementById("progress");
         progress.style.width = '10%';
         progress.parentNode.style.visibility = "visible";
+        progress.textContent = label ? label : "";
 
         var url = credentials.url.replace(/\/+$/, "") + "/api/v3/" + urlPart;
 
@@ -40,16 +41,16 @@
                 if (r.status != 200) return;
                 callback(JSON.parse(r.responseText));
             } else if (r.readyState >= 3) {
-                progress.style.width = '80%';
+                progress.style.width = '70%';
             } else if (r.readyState >= 2) {
                 progress.style.width = '60%';
             } else if (r.readyState >= 1) {
-                progress.style.width = '40%';
+                progress.style.width = '50%';
             } else if (r.readyState >= 0) {
-                progress.style.width = '20%';
+                progress.style.width = '40%';
             }
         };
-        r.send(parameters);
+        r.send();
     }
 
     function clearProjectList() {
@@ -57,47 +58,135 @@
         ul.innerHTML = "";
     }
 
-    function updateProjects(callback) {
+    function queryProjects(callback, allProjects, page) {
+        if (!page) {
+            page = 1;
+        }
+
         query(
             function (projects) {
-                clearProjectList();
+                if (!projects.length) {
+                    callback(allProjects);
+                    return;
+                }
 
-                var ul = document.getElementById('project-switch');
+                if (allProjects) {
+                    allProjects = allProjects.concat(projects);
+                } else {
+                    allProjects = projects;
+                }
 
-                projects.sort(function (a, b) {
-                    return a.name_with_namespace.localeCompare(b.name_with_namespace);
-                });
-
-                var projectIdTitle = {};
-                var namespace = null;
-                projects.forEach(function (project) {
-                    projectIdTitle[project.id] = project.name_with_namespace;
-
-                    if (null === namespace) {
-                        namespace = project.namespace.name;
-                    } else if (namespace != project.namespace.name) {
-                        var li = document.createElement('li');
-                        li.className = 'divider';
-                        li.textContent = project.namespace.name;
-                        ul.appendChild(li);
-
-                        namespace = project.namespace.name;
-                    }
-
-                    var a = document.createElement('a');
-                    a.href = '#' + project.id;
-                    a.setAttribute('data-project-id', project.id);
-                    a.setAttribute('data-project', JSON.stringify(project));
-                    a.textContent = project.name_with_namespace;
-
-                    var li = document.createElement('li');
-                    li.appendChild(a);
-                    ul.appendChild(li);
-                });
-
-                callback();
+                queryProjects(callback, allProjects, page + 1);
             },
-            'projects?per_page=100000'
+            "projects?per_page=1000&page={page}".replace("{page}", page),
+            "query projects, page " + page + "..."
+        );
+    }
+
+    function updateProjects(callback) {
+        queryProjects(function (projects) {
+            clearProjectList();
+
+            var ul = document.getElementById('project-switch');
+
+            projects.sort(function (a, b) {
+                return a.name_with_namespace.localeCompare(b.name_with_namespace);
+            });
+
+            var projectIdTitle = {};
+            var namespace = null;
+            projects.forEach(function (project) {
+                projectIdTitle[project.id] = project.name_with_namespace;
+
+                if (null === namespace) {
+                    namespace = project.namespace.name;
+                } else if (namespace != project.namespace.name) {
+                    var li = document.createElement('li');
+                    li.className = 'divider';
+                    li.textContent = project.namespace.name;
+                    ul.appendChild(li);
+
+                    namespace = project.namespace.name;
+                }
+
+                var a = document.createElement('a');
+                a.href = '#' + project.id;
+                a.setAttribute('data-project-id', project.id);
+                a.setAttribute('data-project', JSON.stringify(project));
+                a.textContent = project.name_with_namespace;
+
+                var li = document.createElement('li');
+                li.appendChild(a);
+                ul.appendChild(li);
+            });
+
+            callback();
+        });
+    }
+
+    function queryLabels(projectId, callback, allLabels) {
+        query(
+            function (labels) {
+                if (allLabels) {
+                    allLabels = allLabels.concat(labels);
+                } else {
+                    allLabels = labels;
+                }
+
+                callback(allLabels);
+            },
+            "projects/{id}/labels".replace("{id}", projectId),
+            "query labels..."
+        );
+    }
+
+    function queryMilestones(projectId, callback, allMilestones, page) {
+        if (!page) {
+            page = 1;
+        }
+
+        query(
+            function (milestones) {
+                if (!milestones.length) {
+                    callback(allMilestones);
+                    return;
+                }
+
+                if (allMilestones) {
+                    allMilestones = allMilestones.concat(milestones);
+                } else {
+                    allMilestones = milestones;
+                }
+
+                queryMilestones(projectId, callback, allMilestones, page + 1);
+            },
+            "projects/{id}/milestones?per_page=1000&page={page}".replace("{id}", projectId).replace("{page}", page),
+            "query milestones, page " + page + "..."
+        );
+    }
+
+    function queryIssues(projectId, callback, allIssues, page) {
+        if (!page) {
+            page = 1;
+        }
+
+        query(
+            function (issues) {
+                if (!issues.length) {
+                    callback(allIssues);
+                    return;
+                }
+
+                if (allIssues) {
+                    allIssues = allIssues.concat(issues);
+                } else {
+                    allIssues = issues;
+                }
+
+                queryIssues(projectId, callback, allIssues, page + 1);
+            },
+            "projects/{id}/issues?per_page=1000&page={page}".replace("{id}", projectId).replace("{page}", page),
+            "query issues, page " + page + "..."
         );
     }
 
@@ -123,46 +212,37 @@
                     .parentNode.className = 'active';
                 document.getElementById("brand").textContent = currentProject.name_with_namespace;
 
-                query(
-                    function (labels) {
-                        var labelColors = {};
-                        labels.forEach(function (label) {
-                            labelColors[label.name] = label.color;
+                queryLabels(project.id, function(labels) {
+                    queryMilestones(project.id, function (milestones) {
+                        queryIssues(project.id, function (issues) {
+                            clearIssues();
+
+                            milestones.sort(function (a, b) {
+                                if (a.due_date && !b.due_date) {
+                                    return -1;
+                                }
+                                if (!a.due_date && b.due_date) {
+                                    return 1;
+                                }
+                                if (a.due_date && b.due_date) {
+                                    a = new Date(a.due_date);
+                                    b = new Date(b.due_date);
+
+                                    return a.getTime() - b.getTime();
+                                }
+                                return a.title.localeCompare(b.title);
+                            });
+
+                            var labelColors = {};
+                            labels.forEach(function (label) {
+                                labelColors[label.name] = label.color;
+                            });
+
+                            renderMilestones(currentProject, milestones);
+                            renderIssues(currentProject, labelColors, issues);
                         });
-
-                        query(
-                            function (milestones) {
-                                milestones.sort(function (a, b) {
-                                    if (a.due_date && !b.due_date) {
-                                        return -1;
-                                    }
-                                    if (!a.due_date && b.due_date) {
-                                        return 1;
-                                    }
-                                    if (a.due_date && b.due_date) {
-                                        a = new Date(a.due_date);
-                                        b = new Date(b.due_date);
-
-                                        return a.getTime() - b.getTime();
-                                    }
-                                    return a.title.localeCompare(b.title);
-                                });
-
-                                query(
-                                    function (issues) {
-                                        clearIssues();
-
-                                        renderMilestones(currentProject, milestones);
-                                        renderIssues(currentProject, labelColors, issues);
-                                    },
-                                    "projects/{}/issues?per_page=100000".replace("{}", currentProject.id)
-                                );
-                            },
-                            "projects/{}/milestones?per_page=100000".replace("{}", currentProject.id)
-                        );
-                    },
-                    "projects/{}/labels?per_page=100000".replace("{}", currentProject.id)
-                );
+                    });
+                });
             },
             "projects/{}".replace("{}", projectId)
         );
@@ -212,7 +292,7 @@
         } else {
             headingLink = document.createElement("a");
             headingLink.target = "_blank";
-            headingLink.href = credentials.url.replace(/\/+$/, "") + "/" + currentProject.path_with_namespace + "/milestones/" + milestone.id;
+            headingLink.href = credentials.url.replace(/\/+$/, "") + "/" + currentProject.path_with_namespace + "/milestones/" + milestone.iid;
             headingLink.textContent = milestone.title;
         }
 
