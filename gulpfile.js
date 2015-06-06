@@ -12,6 +12,7 @@ var gulp = require('gulp'),
     uglifyJs = require('gulp-uglify'),
     sass = require('gulp-sass'),
     sourcemaps = require('gulp-sourcemaps'),
+    ts = require('gulp-typescript'),
     twig = require('gulp-twig'),
 // image optimizers
     jpegtran = require('imagemin-jpegtran'),
@@ -19,7 +20,8 @@ var gulp = require('gulp'),
     svgo = require('imagemin-svgo'),
 // native modules
     del = require('del'),
-    runSequence = require('run-sequence');
+    runSequence = require('run-sequence'),
+    merge = require('merge2');
 
 /**
  * Installation tasks
@@ -41,7 +43,7 @@ gulp.task('build-pages', function () {
     return gulp
         .src([
             'sources/pages/**/*.twig'
-        ], { base: 'sources/pages' })
+        ], {base: 'sources/pages'})
         .pipe(plumber())
         .pipe(twig())
         .pipe(minifyHTML())
@@ -79,23 +81,46 @@ gulp.task('build-stylesheets', function () {
 /**
  * Build javascripts tasks
  */
+var tsProject = ts.createProject({
+    sortOutput: true,
+    declarationFiles: true,
+    noExternalResolve: true
+});
+
 gulp.task('clean-javascripts', function (cb) {
     del(['build/javascripts'], cb);
 });
 
 gulp.task('build-javascripts', function () {
-    return gulp
+    var assets = gulp
         .src([
             'bower_components/jquery/dist/jquery.js',
-            'bower_components/bootstrap-sass/assets/javascripts/bootstrap.js',
-            'sources/javascripts/**/*.js'
+            'bower_components/bootstrap-sass/assets/javascripts/bootstrap.js'
         ])
         .pipe(plumber())
         .pipe(sourcemaps.init({loadMaps: true}))
-        .pipe(concat('website.js'))
+        .pipe(concat('assets.js'))
         .pipe(uglifyJs())
-        .pipe(sourcemaps.write('.', {sourceRoot: '../sources/javascripts'}))
+        .pipe(sourcemaps.write('.', {sourceRoot: '../bower_components'}))
         .pipe(gulp.dest('build/javascripts'));
+
+    var tsResult = gulp
+        .src([
+            'typings/**/*.ts',
+            'sources/javascripts/**/*.ts'
+        ])
+        .pipe(sourcemaps.init())
+        .pipe(ts(tsProject));
+
+    return merge([
+        assets,
+        tsResult.dts
+            .pipe(gulp.dest('build/definitions')),
+        tsResult.js
+            .pipe(concat('output.js'))
+            .pipe(sourcemaps.write('.', {sourceRoot: '../sources/javascripts'}))
+            .pipe(gulp.dest('build/javascripts'))
+    ]);
 });
 
 /**
@@ -109,7 +134,7 @@ gulp.task('build-images', function () {
     return gulp
         .src([
             'sources/images/**/*.{jpg,png,gif,svg}'
-        ], { base: 'sources/images' })
+        ], {base: 'sources/images'})
         .pipe(plumber())
         .pipe(newer('build/images'))
         .pipe(imagemin({
@@ -150,16 +175,16 @@ gulp.task('build', function () {
 
 gulp.task('watch', function () {
     livereload.listen();
-    gulp.watch(['sources/pages/**/*.twig', 'sources/templates/**/*.twig'], function() {
+    gulp.watch(['sources/pages/**/*.twig', 'sources/templates/**/*.twig'], function () {
         runSequence('build-pages', livereload.changed);
     });
-    gulp.watch('sources/stylesheets/**/**', function() {
+    gulp.watch('sources/stylesheets/**/**', function () {
         runSequence('build-stylesheets', livereload.changed);
     });
-    gulp.watch('sources/javascripts/**/**', function() {
+    gulp.watch('sources/javascripts/**/**', function () {
         runSequence('build-javascripts', livereload.changed);
     });
-    gulp.watch('sources/images/**/*', function() {
+    gulp.watch('sources/images/**/*', function () {
         runSequence('build-images', livereload.changed);
     });
 });
